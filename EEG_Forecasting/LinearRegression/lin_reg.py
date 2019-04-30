@@ -178,7 +178,7 @@ def main():
     # that force(t), emg(t) and eeg(t) impact eeg(t+1))
     max_range = 480 
     if args.latency == True and args.no_emg == False:
-        step_emg, step_eeg = 80, 80
+        step_emg, step_eeg = 20, 20
     
     if args.latency == True and args.no_emg == True:
         step_emg = max_range

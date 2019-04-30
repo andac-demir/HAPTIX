@@ -5,6 +5,7 @@ import numpy as np
 # heatMap is the to be saved numpy array of mean squared error 
 # for different eeg and emg latencies
 heatMap = np.load('latencyHeatmap.npy')
+print(heatMap)
 colorscale = [[0, '#66475e'], [1, '#ecbfe0']]
 font_colors = ['#efecee', '#3c3636']
 fig = ff.create_annotated_heatmap(heatMap, colorscale=colorscale, 
