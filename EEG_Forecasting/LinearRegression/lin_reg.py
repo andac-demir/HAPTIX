@@ -177,22 +177,25 @@ def main():
     # otherwise just use the current time step (a poor assumption - 
     # that force(t), emg(t) and eeg(t) impact eeg(t+1))
     max_range = 480 
-    if args.latency == True:
-        step_emg, step_eeg = 60, 60
+    if args.latency == True and args.no_emg == False:
+        step_emg, step_eeg = 80, 80
+    
+    if args.latency == True and args.no_emg == True:
+        step_emg = max_range
+        step_eeg = 60
+
     if args.latency == False:
         step_emg, step_eeg = max_range, max_range
-    if args.no_emg == True:
-        step_emg = max_range
-        step_eeg = 10
 
     # create a heatmap to determine the latency between 
     # the force-eeg and eeg-emg 
     N_rows = (max_range - step_eeg) / step_eeg + 1
     N_cols = (max_range - step_emg) / step_emg + 1
     heatMap = np.zeros((N_rows, N_cols))
-    i, j = 0, 0
 
+    row = 0
     for eeg_delay in list(range(0, max_range, step_eeg)):
+        col = 0
         for emg_delay in list(range(0, max_range, step_emg)):
             if args.no_emg == False:
                 print("Solving for EEG delay %i and EMG delay %i" %(eeg_delay, 
@@ -232,8 +235,9 @@ def main():
             pred = reg.predict(testX)
             mas = mean_absolute_error(testY, pred)
             mse = mean_squared_error(testY, pred)
-            heatMap[i,j] = mse
-            j += 1
+            heatMap[row,col] = mse
+            if args.no_emg == False:
+                col += 1
             print("Mean squared error: %.16f" %mse)
             dict = {'weight matrix': coefs, 'intercept': intercept,
                     'alpha': reg.alpha_, 'mas': mas, 'mse': mse, 
@@ -253,7 +257,7 @@ def main():
                     plotResults(testY[0:100, i], pred[:100, i], i, 
                                 args.verbose)
             del clf   
-        i += 1
+        row += 1
     # Save the heatMap for latencies
     np.save('latencyHeatmap', heatMap)
 

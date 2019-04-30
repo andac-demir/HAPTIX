@@ -1,5 +1,6 @@
 import plotly.plotly as py
 import plotly.figure_factory as ff
+import numpy as np
 
 # heatMap is the to be saved numpy array of mean squared error 
 # for different eeg and emg latencies
