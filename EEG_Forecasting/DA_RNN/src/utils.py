@@ -1,25 +1,20 @@
-# from tqdm import tqdm
-# import matplotlib.pyplot as plt
-
-import numpy as np
 import pandas as pd
+from sklearn.preprocessing import MinMaxScaler
 
-# import matplotlib
-# matplotlib.use('Agg')
-
-
-def read_data(input_path, debug=True):
-    """Read nasdaq stocks data.
+def read_data(input_path, test_mode=False):
+    """Read data in the assigned path.
 
     Args:
-        input_path (str): directory to nasdaq dataset.
+        input_path (str): directory to input dataset.
 
     Returns:
         X (np.ndarray): features.
         y (np.ndarray): ground truth.
-
     """
-    df = pd.read_csv(input_path, nrows = 250 if debug else None)
+    df = pd.read_csv(input_path, nrows=200 if test_mode else None)
+    min_max_scaler = MinMaxScaler()
+    vals_scaled = min_max_scaler.fit_transform(df.values)
+    df = pd.DataFrame(vals_scaled)
     X = df.iloc[:, 0:-1].values
     y = df.iloc[:, -1].values
 

@@ -1,16 +1,22 @@
+"""
+Based on the paper "A Dual Stage Attention Based Recurrent Neural Network
+for Time-Series Prediction"
+"""
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 from utils import *
 from torch.autograd import Variable
-import torch
 import numpy as np
+import torch
 from torch import nn
 from torch import optim
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
-import matplotlib
-import matplotlib.pyplot as plt
 
 
 class Encoder(nn.Module):
-    def __init__(self, T, input_size, encoder_num_hidden):
+    def __init__(self, T, input_size,  encoder_num_hidden):
         super(Encoder, self).__init__()
         self.encoder_num_hidden = encoder_num_hidden
         self.input_size = input_size
@@ -23,7 +29,7 @@ class Encoder(nn.Module):
         # Construct Input Attention Mechanism via deterministic attention model
         # Eq. 8: W_e[h_{t-1}; s_{t-1}] + U_e * x^k
         self.encoder_attn = nn.Linear(
-            in_features=2*self.encoder_num_hidden + self.T - 1, out_features=1, bias=True)
+            in_features=2 * self.encoder_num_hidden + self.T - 1, out_features=1, bias=True)
 
     def forward(self, X):
         X_tilde = Variable(X.data.new(
@@ -51,7 +57,7 @@ class Encoder(nn.Module):
                 x.view(-1, self.encoder_num_hidden * 2 + self.T - 1))
 
             # get weights by softmax
-            alpha = F.softmax(x.view(-1, self.input_size))
+            alpha = F.softmax(x.view(-1, self.input_size), dim=1)
 
             # get new input for LSTM
             x_tilde = torch.mul(alpha, X[:, t, :])
@@ -69,8 +75,7 @@ class Encoder(nn.Module):
         return X_tilde, X_encoded
 
     def _init_states(self, X):
-        """
-        Initialize all 0 hidden states and cell states for encoder.
+        """Initialize all 0 hidden states and cell states for encoder.
         Args:
             X
         Returns:
@@ -89,6 +94,7 @@ class Decoder(nn.Module):
         self.decoder_num_hidden = decoder_num_hidden
         self.encoder_num_hidden = encoder_num_hidden
         self.T = T
+
         self.attn_layer = nn.Sequential(nn.Linear(2 * decoder_num_hidden + encoder_num_hidden, encoder_num_hidden),
                                         nn.Tanh(),
                                         nn.Linear(encoder_num_hidden, 1))
@@ -96,6 +102,7 @@ class Decoder(nn.Module):
             input_size=1, hidden_size=decoder_num_hidden)
         self.fc = nn.Linear(encoder_num_hidden + 1, 1)
         self.fc_final = nn.Linear(decoder_num_hidden + encoder_num_hidden, 1)
+
         self.fc.weight.data.normal_()
 
     def forward(self, X_encoed, y_prev):
@@ -103,12 +110,13 @@ class Decoder(nn.Module):
         c_n = self._init_states(X_encoed)
 
         for t in range(self.T - 1):
+
             x = torch.cat((d_n.repeat(self.T - 1, 1, 1).permute(1, 0, 2),
                            c_n.repeat(self.T - 1, 1, 1).permute(1, 0, 2),
                            X_encoed), dim=2)
 
             beta = F.softmax(self.attn_layer(
-                x.view(-1, 2 * self.decoder_num_hidden + self.encoder_num_hidden)).view(-1, self.T - 1))
+                x.view(-1, 2 * self.decoder_num_hidden + self.encoder_num_hidden)).view(-1, self.T - 1), dim=1)
             # Eqn. 14: compute context vector
             # batch_size * encoder_hidden_size
             context = torch.bmm(beta.unsqueeze(1), X_encoed)[:, 0, :]
@@ -127,11 +135,11 @@ class Decoder(nn.Module):
                 c_n = final_states[1]
         # Eqn. 22: final output
         y_pred = self.fc_final(torch.cat((d_n[0], context), dim=1))
+
         return y_pred
 
     def _init_states(self, X):
-        """
-        Initialize all 0 hidden states and cell states for encoder.
+        """Initialize all 0 hidden states and cell states for encoder.
         Args:
             X
         Returns:
@@ -145,9 +153,10 @@ class Decoder(nn.Module):
 
 
 class DA_rnn(nn.Module):
-    def __init__(self, X, y, T, encoder_num_hidden, decoder_num_hidden, 
+    def __init__(self, X, y, device, T, encoder_num_hidden, decoder_num_hidden, 
                  batch_size, learning_rate, epochs):
         super(DA_rnn, self).__init__()
+        self.device = device
         self.encoder_num_hidden = encoder_num_hidden
         self.decoder_num_hidden = decoder_num_hidden
         self.learning_rate = learning_rate
@@ -158,28 +167,42 @@ class DA_rnn(nn.Module):
         self.X = X
         self.y = y
 
-        self.Encoder = Encoder(input_size=X.shape[1],
-                               encoder_num_hidden=encoder_num_hidden,
-                               T=T)
-        self.Decoder = Decoder(encoder_num_hidden=encoder_num_hidden,
-                               decoder_num_hidden=decoder_num_hidden,
-                               T=T)
+        if self.device:
+            self.Encoder = Encoder(input_size=X.shape[1],
+                                encoder_num_hidden=encoder_num_hidden,
+                                T=T).cuda()
+            self.Decoder = Decoder(encoder_num_hidden=encoder_num_hidden,
+                                decoder_num_hidden=decoder_num_hidden,
+                                T=T).cuda()
+        else:
+            self.Encoder = Encoder(input_size=X.shape[1],
+                            encoder_num_hidden=encoder_num_hidden,
+                            T=T)
+            self.Decoder = Decoder(encoder_num_hidden=encoder_num_hidden,
+                                decoder_num_hidden=decoder_num_hidden,
+                                T=T)
 
         # Loss function
+        # lr will be reduced when the quantity monitored has stopped decreasing
         self.criterion = nn.MSELoss()
         self.encoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
                                                           self.Encoder.parameters()),
                                             lr=self.learning_rate)
+        #self.encoder_scheduler = ReduceLROnPlateau(self.encoder_optimizer, 
+        #                                           mode='min', factor=0.2,
+        #                                           patience=2, verbose=True)
         self.decoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
                                                           self.Decoder.parameters()),
                                             lr=self.learning_rate)
+        #self.decoder_scheduler = ReduceLROnPlateau(self.decoder_optimizer,
+        #                                           mode='min', factor=0.2,
+        #                                           patience=2, verbose=True)
 
         # Training set
         self.train_timesteps = int(self.X.shape[0] * 0.7)
         self.input_size = self.X.shape[1]
 
     def train(self):
-        """training process."""
         iter_per_epoch = int(np.ceil(self.train_timesteps * 1. / self.batch_size))
         self.iter_losses = np.zeros(self.epochs * iter_per_epoch)
         self.epoch_losses = np.zeros(self.epochs)
@@ -207,26 +230,21 @@ class DA_rnn(nn.Module):
                     x[bs, :, :] = self.X[indices[bs]:(indices[bs] + self.T - 1), :]
                     y_prev[bs, :] = self.y[indices[bs]:(indices[bs] + self.T - 1)]
 
-                loss = self.train_forward(x, y_prev, y_gt)
+                loss = self.train_iteration(x, y_prev, y_gt)
                 self.iter_losses[int(epoch * iter_per_epoch + idx / self.batch_size)] = loss
 
                 idx += self.batch_size
                 n_iter += 1
 
-                if n_iter % 50000 == 0 and n_iter != 0:
-                    for param_group in self.encoder_optimizer.param_groups:
-                        param_group['lr'] = param_group['lr'] * 0.9
-                    for param_group in self.decoder_optimizer.param_groups:
-                        param_group['lr'] = param_group['lr'] * 0.9
+                self.epoch_losses[epoch] = np.mean(self.iter_losses[range(epoch * iter_per_epoch, 
+                                                                    (epoch + 1) * iter_per_epoch)])
 
-                self.epoch_losses[epoch] = np.mean(self.iter_losses[range(epoch * iter_per_epoch, (epoch + 1) * iter_per_epoch)])
-
-            if epoch % 10 == 0:
-                print("Epochs: ", epoch, " Iterations: ", n_iter, " Loss: ", self.epoch_losses[epoch])
+            if epoch % 1 == 0:
+                print("Epochs: %i, Loss: %.8f" %(epoch, self.epoch_losses[epoch]))
 
             if epoch == self.epochs - 1:
-                y_train_pred = self.test(on_train=True)
-                y_test_pred = self.test(on_train=False)
+                y_train_pred = self.eval(on_train=True)
+                y_test_pred = self.eval(on_train=False)
                 y_pred = np.concatenate((y_train_pred, y_test_pred))
                 plt.ioff()
                 plt.figure()
@@ -238,19 +256,29 @@ class DA_rnn(nn.Module):
                          y_test_pred, label='Predicted - Test')
                 plt.legend(loc='upper left')
                 plt.show()
+            # scheduler steps after each epoch not iteration
+            #self.encoder_scheduler.step(loss)
+            #self.decoder_scheduler.step(loss)
 
-    def train_forward(self, X, y_prev, y_gt):
+    def train_iteration(self, X, y_prev, y_gt):
         # zero gradients
         self.encoder_optimizer.zero_grad()
         self.decoder_optimizer.zero_grad()
 
-        input_weighted, input_encoded = self.Encoder(
-            Variable(torch.from_numpy(X).type(torch.FloatTensor)))
-        y_pred = self.Decoder(input_encoded, Variable(
-            torch.from_numpy(y_prev).type(torch.FloatTensor)))
-
-        y_true = Variable(torch.from_numpy(
-            y_gt).type(torch.FloatTensor))
+        if self.device:
+            input_weighted, input_encoded = self.Encoder(
+                Variable(torch.from_numpy(X).type(torch.FloatTensor).cuda()))
+            y_pred = self.Decoder(input_encoded, Variable(
+                torch.from_numpy(y_prev).type(torch.FloatTensor).cuda()))
+            y_true = Variable(torch.from_numpy(
+                y_gt).type(torch.FloatTensor).cuda())
+        else:
+            input_weighted, input_encoded = self.Encoder(
+                Variable(torch.from_numpy(X).type(torch.FloatTensor)))
+            y_pred = self.Decoder(input_encoded, Variable(
+                torch.from_numpy(y_prev).type(torch.FloatTensor)))
+            y_true = Variable(torch.from_numpy(
+                y_gt).type(torch.FloatTensor))
 
         y_true = y_true.view(-1, 1)
         loss = self.criterion(y_pred, y_true)
@@ -258,10 +286,10 @@ class DA_rnn(nn.Module):
 
         self.encoder_optimizer.step()
         self.decoder_optimizer.step()
-
         return loss.item()
 
-    def test(self, on_train=False):
+
+    def eval(self, on_train=False):
         if on_train:
             y_pred = np.zeros(self.train_timesteps - self.T + 1)
         else:
@@ -281,8 +309,13 @@ class DA_rnn(nn.Module):
                     X[j, :, :] = self.X[range(batch_idx[j] + self.train_timesteps - self.T, batch_idx[j] + self.train_timesteps - 1), :]
                     y_history[j, :] = self.y[range(batch_idx[j] + self.train_timesteps - self.T,  batch_idx[j]+ self.train_timesteps - 1)]
 
-            y_history = Variable(torch.from_numpy(y_history).type(torch.FloatTensor))
-            _, input_encoded = self.Encoder(Variable(torch.from_numpy(X).type(torch.FloatTensor)))
+            if self.device:
+                y_history = Variable(torch.from_numpy(y_history).type(torch.FloatTensor).cuda())
+                _, input_encoded = self.Encoder(Variable(torch.from_numpy(X).type(torch.FloatTensor).cuda()))
+            else: 
+                y_history = Variable(torch.from_numpy(y_history).type(torch.FloatTensor))
+                _, input_encoded = self.Encoder(Variable(torch.from_numpy(X).type(torch.FloatTensor)))
+
             y_pred[i:(i + self.batch_size)] = self.Decoder(input_encoded, y_history).cpu().data.numpy()[:, 0]
             i += self.batch_size
 
