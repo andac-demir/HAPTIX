@@ -188,15 +188,15 @@ class DA_rnn(nn.Module):
         self.encoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
                                                           self.Encoder.parameters()),
                                             lr=self.learning_rate)
-        #self.encoder_scheduler = ReduceLROnPlateau(self.encoder_optimizer, 
-        #                                           mode='min', factor=0.2,
-        #                                           patience=2, verbose=True)
+        self.encoder_scheduler = ReduceLROnPlateau(self.encoder_optimizer, 
+                                                   mode='min', factor=0.5,
+                                                   patience=0, verbose=True)
         self.decoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
                                                           self.Decoder.parameters()),
                                             lr=self.learning_rate)
-        #self.decoder_scheduler = ReduceLROnPlateau(self.decoder_optimizer,
-        #                                           mode='min', factor=0.2,
-        #                                           patience=2, verbose=True)
+        self.decoder_scheduler = ReduceLROnPlateau(self.decoder_optimizer,
+                                                   mode='min', factor=0.5,
+                                                   patience=0, verbose=True)
 
         # Training set
         self.train_timesteps = int(self.X.shape[0] * 0.7)
@@ -257,8 +257,8 @@ class DA_rnn(nn.Module):
                 plt.legend(loc='upper left')
                 plt.show()
             # scheduler steps after each epoch not iteration
-            #self.encoder_scheduler.step(loss)
-            #self.decoder_scheduler.step(loss)
+            self.encoder_scheduler.step(loss)
+            self.decoder_scheduler.step(loss)
 
     def train_iteration(self, X, y_prev, y_gt):
         # zero gradients

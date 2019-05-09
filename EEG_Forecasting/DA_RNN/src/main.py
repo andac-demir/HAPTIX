@@ -24,10 +24,19 @@ def parseArgs():
     parser.add_argument('--ntimestep', type=int, default=10, help='the number of time steps in the window T [10]')
 
     # Training parameters setting
-    parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train [20]')
+    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train [20]')
     parser.add_argument('--lr', type=float, default=0.001, help='learning rate [0.001] reduced when the loss reaches a plateu')
+    parser.add_argument('--save', type=str2bool, default="true", help='save [true] the trained model into the dir. pretrainedModel')
     args = parser.parse_args()
     return args
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
 
 def main():
     args = parseArgs()
@@ -47,6 +56,12 @@ def main():
     else:
         print("Training on CPU.")  
     model.train()
+
+    # Save the trained model:
+    if args.save:
+        PATH = "../pretrainedModel/savedModel.model"
+        torch.save(model.state_dict(), PATH)
+        print("Trained model saved to the path: ", PATH)
 
     # Prediction
     y_pred = model.eval()
