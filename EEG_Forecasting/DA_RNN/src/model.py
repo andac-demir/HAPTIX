@@ -13,7 +13,7 @@ from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
-
+import sys
 
 class Encoder(nn.Module):
     def __init__(self, T, input_size,  encoder_num_hidden):
@@ -154,7 +154,7 @@ class Decoder(nn.Module):
 
 class DA_rnn(nn.Module):
     def __init__(self, X, y, device, T, encoder_num_hidden, decoder_num_hidden, 
-                 batch_size, learning_rate, epochs, train_split):
+                 batch_size, learning_rate, epochs, train_split, optimizer):
         super(DA_rnn, self).__init__()
         self.device = device
         self.encoder_num_hidden = encoder_num_hidden
@@ -167,6 +167,7 @@ class DA_rnn(nn.Module):
         self.X = X
         self.y = y
         self.train_split = train_split
+        self.optimizer = optimizer.lower()
 
         if self.device:
             self.Encoder = Encoder(input_size=X.shape[1],
@@ -186,18 +187,29 @@ class DA_rnn(nn.Module):
         # Loss function
         # lr will be reduced when the quantity monitored has stopped decreasing
         self.criterion = nn.MSELoss()
-        self.encoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
-                                                          self.Encoder.parameters()),
-                                            lr=self.learning_rate)
+        if self.optimizer == "adam":
+            self.encoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
+                                                            self.Encoder.parameters()),
+                                                lr=self.learning_rate)
+            self.decoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
+                                                            self.Decoder.parameters()),
+                                                lr=self.learning_rate)
+        elif self.optimizer == "lbfgs": 
+            self.encoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
+                                                            self.Encoder.parameters()),
+                                                lr=self.learning_rate)
+            self.decoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
+                                                            self.Decoder.parameters()),
+                                                lr=self.learning_rate)           
+        else:
+            sys.exit("Network optimizer can be selected either as adam or lbfgs.")
+        
         self.encoder_scheduler = ReduceLROnPlateau(self.encoder_optimizer, 
                                                    mode='min', factor=0.3,
                                                    patience=0, verbose=True)
-        self.decoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
-                                                          self.Decoder.parameters()),
-                                            lr=self.learning_rate)
         self.decoder_scheduler = ReduceLROnPlateau(self.decoder_optimizer,
-                                                   mode='min', factor=0.3,
-                                                   patience=0, verbose=True)
+                                                    mode='min', factor=0.3,
+                                                    patience=0, verbose=True)
 
         # Training set
         self.train_timesteps = int(self.X.shape[0] * self.train_split)
@@ -259,8 +271,9 @@ class DA_rnn(nn.Module):
 
     def train_iteration(self, X, y_prev, y_gt):
         # zero gradients
-        self.encoder_optimizer.zero_grad()
-        self.decoder_optimizer.zero_grad()
+        if self.optimizer == "adam":
+            self.encoder_optimizer.zero_grad()
+            self.decoder_optimizer.zero_grad()
 
         if self.device:
             input_weighted, input_encoded = self.Encoder(
@@ -285,8 +298,26 @@ class DA_rnn(nn.Module):
         loss = self.criterion(y_pred, y_true)
         loss.backward()
 
-        self.encoder_optimizer.step()
-        self.decoder_optimizer.step()
+        # LBFGS needs to reevaluate the function multiple times, so it is passed 
+        # in a closure that allows them to recompute your model. 
+        # The closure should clear the gradients, compute the loss, and return it.
+        # TODO:
+        def closure():
+            encoder_optimizer.zero_grad()
+            decoder_optimizer.zero_grad()
+            output = model(input)
+            loss = loss_fn(output, target)
+            loss.backward()
+            return loss
+
+        if self.optimizer == "adam":
+            self.encoder_optimizer.step()
+            self.decoder_optimizer.step()
+        # TODO:
+        elif self.optimizer == "lbfgs":
+            self.encoder_optimizer.step(closure)
+            self.decoder_optimizer.step(closure)
+            
         return loss.item()
 
 
