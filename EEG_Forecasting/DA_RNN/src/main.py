@@ -15,7 +15,7 @@ def parseArgs():
     parser = argparse.ArgumentParser(description="DA-RNN")
 
     # Dataset setting
-    parser.add_argument('--dataroot', type=str, default="../nasdaq/nasdaq100_padding.csv", help='path to dataset')
+    parser.add_argument('--datapath', type=str, default="../../haptix_alleeg_allcond.csv", help='path to dataset')
     parser.add_argument('--batchsize', type=int, default=64, help='input batch size [64]')
 
     # Encoder / Decoder parameters setting
@@ -24,9 +24,10 @@ def parseArgs():
     parser.add_argument('--ntimestep', type=int, default=10, help='the number of time steps in the window T [10]')
 
     # Training parameters setting
-    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train [20]')
-    parser.add_argument('--lr', type=float, default=0.001, help='learning rate [0.001] reduced when the loss reaches a plateu')
+    parser.add_argument('--epochs', type=int, default=20, help='number of epochs to train [20]')
+    parser.add_argument('--lr', type=float, default=0.01, help='learning rate [0.01] reduced when the loss reaches a plateu')
     parser.add_argument('--save', type=str2bool, default="true", help='save [true] the trained model into the dir. pretrainedModel')
+    parser.add_argument('--train_split', type=int, default=0.7, help='ratio of training data [0.7]')
     args = parser.parse_args()
     return args
 
@@ -41,13 +42,14 @@ def str2bool(v):
 def main():
     args = parseArgs()
     # Read dataset
-    X, y = read_data(args.dataroot)
+    X, y = read_data(args.datapath)
     print("Data extracted and standardized.")
 
     # Initialize model
     device = True if torch.cuda.is_available() else False
     model = DA_rnn(X, y, device, args.ntimestep, args.nhidden_encoder, 
-                   args.nhidden_decoder, args.batchsize, args.lr, args.epochs)
+                   args.nhidden_decoder, args.batchsize, args.lr, args.epochs,
+                   args.train_split)
 
     # Train
     if device == True:
@@ -59,7 +61,7 @@ def main():
 
     # Save the trained model:
     if args.save:
-        PATH = "../pretrainedModel/savedModel.model"
+        PATH = "../pretrained/savedModel.model"
         torch.save(model.state_dict(), PATH)
         print("Trained model saved to the path: ", PATH)
 

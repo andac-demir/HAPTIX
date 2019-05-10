@@ -154,7 +154,7 @@ class Decoder(nn.Module):
 
 class DA_rnn(nn.Module):
     def __init__(self, X, y, device, T, encoder_num_hidden, decoder_num_hidden, 
-                 batch_size, learning_rate, epochs):
+                 batch_size, learning_rate, epochs, train_split):
         super(DA_rnn, self).__init__()
         self.device = device
         self.encoder_num_hidden = encoder_num_hidden
@@ -166,6 +166,7 @@ class DA_rnn(nn.Module):
         self.T = T
         self.X = X
         self.y = y
+        self.train_split = train_split
 
         if self.device:
             self.Encoder = Encoder(input_size=X.shape[1],
@@ -189,25 +190,23 @@ class DA_rnn(nn.Module):
                                                           self.Encoder.parameters()),
                                             lr=self.learning_rate)
         self.encoder_scheduler = ReduceLROnPlateau(self.encoder_optimizer, 
-                                                   mode='min', factor=0.5,
+                                                   mode='min', factor=0.3,
                                                    patience=0, verbose=True)
         self.decoder_optimizer = optim.Adam(params=filter(lambda p: p.requires_grad,
                                                           self.Decoder.parameters()),
                                             lr=self.learning_rate)
         self.decoder_scheduler = ReduceLROnPlateau(self.decoder_optimizer,
-                                                   mode='min', factor=0.5,
+                                                   mode='min', factor=0.3,
                                                    patience=0, verbose=True)
 
         # Training set
-        self.train_timesteps = int(self.X.shape[0] * 0.7)
+        self.train_timesteps = int(self.X.shape[0] * self.train_split)
         self.input_size = self.X.shape[1]
 
     def train(self):
         iter_per_epoch = int(np.ceil(self.train_timesteps * 1. / self.batch_size))
         self.iter_losses = np.zeros(self.epochs * iter_per_epoch)
         self.epoch_losses = np.zeros(self.epochs)
-
-        n_iter = 0
 
         for epoch in range(self.epochs):
             if self.shuffle:
@@ -234,13 +233,11 @@ class DA_rnn(nn.Module):
                 self.iter_losses[int(epoch * iter_per_epoch + idx / self.batch_size)] = loss
 
                 idx += self.batch_size
-                n_iter += 1
 
                 self.epoch_losses[epoch] = np.mean(self.iter_losses[range(epoch * iter_per_epoch, 
                                                                     (epoch + 1) * iter_per_epoch)])
 
-            if epoch % 1 == 0:
-                print("Epochs: %i, Loss: %.8f" %(epoch, self.epoch_losses[epoch]))
+            print("Epochs: %i, Loss: %.8f" %(epoch, self.epoch_losses[epoch]))
 
             if epoch == self.epochs - 1:
                 y_train_pred = self.eval(on_train=True)
@@ -267,18 +264,22 @@ class DA_rnn(nn.Module):
 
         if self.device:
             input_weighted, input_encoded = self.Encoder(
-                Variable(torch.from_numpy(X).type(torch.FloatTensor).cuda()))
+                Variable(torch.from_numpy(X).type(torch.FloatTensor).cuda(), 
+                                                       requires_grad=False))
             y_pred = self.Decoder(input_encoded, Variable(
-                torch.from_numpy(y_prev).type(torch.FloatTensor).cuda()))
+                torch.from_numpy(y_prev).type(torch.FloatTensor).cuda(),
+                                                  requires_grad=False))
             y_true = Variable(torch.from_numpy(
                 y_gt).type(torch.FloatTensor).cuda())
         else:
             input_weighted, input_encoded = self.Encoder(
-                Variable(torch.from_numpy(X).type(torch.FloatTensor)))
+                Variable(torch.from_numpy(X).type(torch.FloatTensor),
+                                               requires_grad=False))
             y_pred = self.Decoder(input_encoded, Variable(
-                torch.from_numpy(y_prev).type(torch.FloatTensor)))
+                torch.from_numpy(y_prev).type(torch.FloatTensor),
+                                           requires_grad=False))
             y_true = Variable(torch.from_numpy(
-                y_gt).type(torch.FloatTensor))
+                y_gt).type(torch.FloatTensor))  
 
         y_true = y_true.view(-1, 1)
         loss = self.criterion(y_pred, y_true)
