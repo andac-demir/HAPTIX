@@ -1,7 +1,7 @@
 import pandas as pd
 from sklearn.preprocessing import MinMaxScaler
 
-def read_data(datapath, test_mode=False):
+def read_data(datapath, test_mode=True):
     """Read data in the assigned path.
 
     Args:
@@ -11,7 +11,7 @@ def read_data(datapath, test_mode=False):
         X (np.ndarray): features.
         y (np.ndarray): ground truth.
     """
-    df = pd.read_csv(datapath, nrows=200 if test_mode else None)
+    df = pd.read_csv(datapath, nrows=100000 if test_mode else None)
     # Read the first 14 columns: EEG measurements(input) 
     # and Force-x measurement(output)
     df = df[['EEG-1', 'EEG-2', 'EEG-3', 'EEG-4', 'EEG-5', 'EEG-6',

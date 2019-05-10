@@ -84,9 +84,10 @@ def main():
     plt.savefig("2.png")
     plt.close(fig2)
 
+    # Plot the first 500 prediction
     fig3 = plt.figure()
-    plt.plot(y_pred, label='Predicted')
-    plt.plot(model.y[model.train_timesteps:], label="True")
+    plt.plot(y_pred[:500], label='Predicted')
+    plt.plot(model.y[model.train_timesteps:500], label="True")
     plt.title("Prediction and Ground Truth")
     plt.legend(loc = 'upper left')
     plt.savefig("3.png")
