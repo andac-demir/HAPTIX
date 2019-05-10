@@ -32,16 +32,15 @@ def read_data(datapath, debug_mode):
 
     return X, y
 
-def load_model(network, device, path):
-    '''
-    Loads the pretrained saved model for inference on new data
-    '''
+def load_model(model, device, path):
+    ''' Loads the pretrained saved model for inference on new data'''
     if device: # load the saved model trained on gpu to gpu
-        network.load_state_dict(torch.load(path))
+        model.load_state_dict(torch.load(path))
     else: # load the saved model trained on gpu/cpu to cpu
         storage = 'cpu'
-        network.load_state_dict(torch.load(path, map_location=lambda storage, loc: storage))
-       
+        model.load_state_dict(torch.load(path, map_location=lambda storage, loc: storage))
+    
+    model.eval()
 
 
 

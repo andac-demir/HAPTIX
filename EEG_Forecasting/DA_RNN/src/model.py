@@ -252,8 +252,8 @@ class DA_rnn(nn.Module):
             print("Epochs: %i, Loss: %.8f" %(epoch, self.epoch_losses[epoch]))
 
             if epoch == self.epochs - 1:
-                y_train_pred = self.eval(on_train=True)
-                y_test_pred = self.eval(on_train=False)
+                y_train_pred = self.test(on_train=True)
+                y_test_pred = self.test(on_train=False)
                 y_pred = np.concatenate((y_train_pred, y_test_pred))
                 plt.ioff()
                 plt.figure()
@@ -321,7 +321,7 @@ class DA_rnn(nn.Module):
         return loss.item()
 
 
-    def eval(self, on_train=False):
+    def test(self, on_train=False):
         if on_train:
             y_pred = np.zeros(self.train_timesteps - self.T + 1)
         else:

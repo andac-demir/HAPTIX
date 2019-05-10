@@ -10,7 +10,7 @@ import argparse
 from model import *
 from utils import *
 
-PATH = "../pretrained/savedModel.model"
+PATH = "../pretrained/savedModel.pt"
 
 def parseArgs():
     # Parameters settings
@@ -57,7 +57,7 @@ def trainMode(model, device, save):
         print("Training on CPU.")  
     model.train()
     # Prediction
-    y_pred = model.eval()
+    y_pred = model.test()
     # Save the trained model:
     if save:
         torch.save(model.state_dict(), PATH)
