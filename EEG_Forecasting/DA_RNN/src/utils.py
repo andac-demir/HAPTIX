@@ -5,10 +5,8 @@ import torch
 
 def read_data(datapath, debug_mode):
     """Read data in the assigned path.
-
     Args:
         input_path (str): directory to input dataset.
-
     Returns:
         X (np.ndarray): features.
         y (np.ndarray): ground truth.
@@ -40,7 +38,6 @@ def load_model(model, device, path):
         storage = 'cpu'
         model.load_state_dict(torch.load(path, map_location=lambda storage, loc: storage))
     
-    model.eval()
 
 
 

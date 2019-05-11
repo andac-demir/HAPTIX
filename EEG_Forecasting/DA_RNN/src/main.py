@@ -98,9 +98,9 @@ def main():
     if args.run_pretrained == False:
         y_pred = trainMode(model, device, args.save)
     else: # run the pretrained model
-        model = load_model(model, device, PATH)
+        load_model(model, device, PATH)
         print("Pretrained model is loaded successfully.")
-        y_pred = model.eval()
+        y_pred = model.test()
 
     fig3 = plt.figure()
     plt.plot(y_pred[:500], label='Predicted')
