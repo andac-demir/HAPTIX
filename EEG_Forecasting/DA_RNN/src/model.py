@@ -161,7 +161,7 @@ class DA_rnn(nn.Module):
         self.decoder_num_hidden = decoder_num_hidden
         self.learning_rate = learning_rate
         self.batch_size = batch_size
-        self.shuffle = False
+        self.shuffle = True
         self.epochs = epochs
         self.T = T
         self.X = X

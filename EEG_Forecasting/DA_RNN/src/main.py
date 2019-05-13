@@ -19,6 +19,7 @@ def parseArgs():
     # Dataset setting
     parser.add_argument('--datapath', type=str, default="../../haptix_alleeg_allcond.csv", help='path to dataset')
     parser.add_argument('--batchsize', type=int, default=64, help='input batch size [64]')
+    parser.add_argument('--latency', type=int, default=330, help='latency between force and eeg measurements [330]')
 
     # Encoder / Decoder parameters setting
     parser.add_argument('--nhidden_encoder', type=int, default=128, help='size of hidden states for the encoder m [64, 128]')
@@ -26,10 +27,10 @@ def parseArgs():
     parser.add_argument('--ntimestep', type=int, default=10, help='the number of time steps in the window T [10]')
 
     # Training parameters setting
-    parser.add_argument('--debug_mode', type=str2bool, default="true", help=("If using the deubgging mode, only take 100K samples"
-                                                                             "from the csv file for shorter computation time."
-                                                                             " [true]"))
-    parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train [20]')
+    parser.add_argument('--debug_mode', type=str2bool, default="false", help=("If using the deubgging mode, only take 100K samples"
+                                                                              "from the csv file for shorter computation time."
+                                                                              " [false]"))
+    parser.add_argument('--epochs', type=int, default=10, help='number of epochs to train [20]')
     parser.add_argument('--lr', type=float, default=0.01, help='learning rate [0.01] reduced when the loss reaches a plateu')
     parser.add_argument('--save', type=str2bool, default="true", help='save [true] the trained model into the dir. pretrainedModel')
     parser.add_argument('--train_split', type=int, default=0.7, help='ratio of training data [0.7]')
@@ -85,7 +86,7 @@ def trainMode(model, device, save):
 def main():
     args = parseArgs()
     # Read dataset
-    X, y = read_data(args.datapath, args.debug_mode)
+    X, y = read_data(args.datapath, args.debug_mode, args.latency)
     print("Data extracted and standardized.")
 
     # Initialize model
@@ -106,7 +107,7 @@ def main():
     plt.plot(y_pred[:500], label='Predicted')
     plt.plot(model.y[model.train_timesteps:model.train_timesteps+500], label="True")
     plt.title("Prediction and Ground Truth")
-    plt.legend(loc = 'upper left')
+    plt.legend(loc='upper left')
     plt.savefig("pred_vs_gt.png")
     plt.close(fig3)
     print('Finished Training')
