@@ -8,7 +8,8 @@ matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import argparse
 from model import *
-from utils import *
+import utils
+from torchviz import make_dot
 
 PATH = "../pretrained/savedModel.pt"
 
@@ -83,11 +84,23 @@ def trainMode(model, device, save):
     return y_pred
 
 
+def printAttributes():
+    print(("Model Attributes:\n"
+           "weight_ih_l[k]: the learnable input-hidden weights of the k-th layer,\n"
+           "of shape (hidden_size, input_size) for k = 0. Otherwise, the shape is\n"
+           "(hidden_size, num_directions * hidden_size)\n"
+           "weight_hh_l[k]: the learnable hidden-hidden weights of the k-th layer,\n"
+           "of shape (hidden_size, hidden_size)\n"
+           "bias_ih_l[k]: the learnable input-hidden bias of the k-th layer,\n"
+           "of shape (hidden_size)\n"
+           "bias_hh_l[k]: the learnable hidden-hidden bias of the k-th layer,\n"
+           "of shape (hidden_size)\n"))
+
 def main():
     args = parseArgs()
     # Read dataset
-    X, y = read_data(args.datapath, args.debug_mode, args.latency)
-    print("Data extracted and standardized.")
+    X, y = utils.read_data(args.datapath, args.debug_mode, args.latency)
+    print("\nData extracted and standardized.\n")
 
     # Initialize model
     device = True if torch.cuda.is_available() else False
@@ -98,19 +111,32 @@ def main():
     # Train mode
     if args.run_pretrained == False:
         y_pred = trainMode(model, device, args.save)
-    else: # run the pretrained model
-        load_model(model, device, PATH)
-        print("Pretrained model is loaded successfully.")
+        print('Finished Training')
+    # run the pretrained model and plt the model architecture on Visdom
+    else: 
+        utils.load_model(model, device, PATH)
+        printAttributes()
+        print("Model Structure:")
+        for k in sorted(model.state_dict().keys()):
+            v = model.state_dict()[k]
+            print(k, v.shape)
+            print(type(v))
+            model.state_dict()[k] = Variable(v, requires_grad=True)
+        print('\nTotal parameters:', sum(v.numel() for v in model.state_dict().\
+                                                                    values()))
+        print("\nPretrained model is loaded successfully.")
         y_pred = model.test()
-
+ 
     fig3 = plt.figure()
-    plt.plot(y_pred[:500], label='Predicted')
-    plt.plot(model.y[model.train_timesteps:model.train_timesteps+500], label="True")
+    start_idx=0
+    plt.plot(y_pred[start_idx:start_idx+500], label='Predicted')
+    plt.plot(model.y[start_idx+model.train_timesteps:
+                     start_idx+model.train_timesteps+500], 
+             label="True")
     plt.title("Prediction and Ground Truth")
     plt.legend(loc='upper left')
     plt.savefig("pred_vs_gt.png")
     plt.close(fig3)
-    print('Finished Training')
 
 
 if __name__ == "__main__":

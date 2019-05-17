@@ -13,7 +13,14 @@ from torch import nn
 from torch import optim
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 import torch.nn.functional as F
+from visdom import Visdom
 import sys
+
+DEFAULT_PORT = 8097
+DEFAULT_HOSTNAME = "10.75.15.194" #(CSL - GPU IP address)
+viz = Visdom(port=DEFAULT_PORT, server=DEFAULT_HOSTNAME)
+assert viz.check_connection(timeout_seconds=5), \
+'No connection could be formed quickly'
 
 class Encoder(nn.Module):
     def __init__(self, T, input_size,  encoder_num_hidden):
@@ -229,6 +236,12 @@ class DA_rnn(nn.Module):
             idx = 0
 
             while (idx < self.train_timesteps):
+                trace = dict(x=[1, 2, 3], y=[4, 5, 6], mode="markers+lines", type='custom',
+                marker={'color': 'red', 'symbol': 104, 'size': "10"},
+                text=["one", "two", "three"], name='1st Trace')
+                layout = dict(title="First Plot", xaxis={'title': 'x1'}, yaxis={'title': 'x2'})
+
+                vis._send({'data': [trace], 'layout': layout, 'win': 'mywin'})
                 # get the indices of X_train
                 indices = ref_idx[idx:(idx + self.batch_size)]
                 # x = np.zeros((self.T - 1, len(indices), self.input_size))
@@ -242,14 +255,15 @@ class DA_rnn(nn.Module):
                     y_prev[bs, :] = self.y[indices[bs]:(indices[bs] + self.T - 1)]
 
                 loss = self.train_iteration(x, y_prev, y_gt)
-                self.iter_losses[int(epoch * iter_per_epoch + idx / self.batch_size)] = loss
-
+                print("Epoch: %i, Batch: %i, Loss: " %(epoch, int(idx/self.batch_size)), loss)
+                self.iter_losses[int(epoch * iter_per_epoch + idx/self.batch_size)] = loss
                 idx += self.batch_size
-
                 self.epoch_losses[epoch] = np.mean(self.iter_losses[range(epoch * iter_per_epoch, 
                                                                     (epoch + 1) * iter_per_epoch)])
 
-            print("Epochs: %i, Loss: %.8f" %(epoch, self.epoch_losses[epoch]))
+            print("\nEpochs: %i, Loss: %.8f" %(epoch, self.epoch_losses[epoch]))
+            print("Epoch %i training over." %epoch)
+            print(50*"*")
 
             if epoch == self.epochs - 1:
                 y_train_pred = self.test(on_train=True)
@@ -326,13 +340,11 @@ class DA_rnn(nn.Module):
             y_pred = np.zeros(self.train_timesteps - self.T + 1)
         else:
             y_pred = np.zeros(self.X.shape[0] - self.train_timesteps)
-
         i = 0
         while i < len(y_pred):
             batch_idx = np.array(range(len(y_pred)))[i : (i + self.batch_size)]
             X = np.zeros((len(batch_idx), self.T - 1, self.X.shape[1]))
             y_history = np.zeros((len(batch_idx), self.T - 1))
-
             for j in range(len(batch_idx)):
                 if on_train:
                     X[j, :, :] = self.X[range(batch_idx[j], batch_idx[j] + self.T - 1), :]

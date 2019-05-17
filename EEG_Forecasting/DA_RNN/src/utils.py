@@ -45,7 +45,8 @@ def load_model(model, device, path):
         model.load_state_dict(torch.load(path))
     else: # load the saved model trained on gpu/cpu to cpu
         storage = 'cpu'
-        model.load_state_dict(torch.load(path, map_location=lambda storage, loc: storage))
+        model.load_state_dict(torch.load(path, map_location=lambda storage, 
+                                         loc: storage))
     
 
 
